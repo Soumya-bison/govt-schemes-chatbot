@@ -1,0 +1,17 @@
+{
+  "name": "government-schemes-marathi-backend",
+  "version": "1.0.0",
+  "description": "Backend API and RAG engine for Maharashtra Government Schemes chatbot",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "@google/genai": "^2.21.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
+    "express": "^4.19.2"
+  }
+}
