@@ -313,7 +313,12 @@ if (fs.existsSync(clientDistPath)) {
     res.sendFile(path.join(clientDistPath, 'index.html'));
   });
 }
-
-app.listen(PORT, () => {
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    message: 'Government Schemes API is running'
+  });
+});
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`Govt Schemes Marathi API Server running on port ${PORT}`);
 });
