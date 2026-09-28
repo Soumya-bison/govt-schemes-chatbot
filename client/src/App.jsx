@@ -62,7 +62,7 @@ export default function App() {
 
   const fetchSchemes = async () => {
     try {
-      const res = await fetch('/api/schemes');
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/schemes`);
       const data = await res.json();
       if (data.success && data.schemes) {
         setSchemes(data.schemes);
