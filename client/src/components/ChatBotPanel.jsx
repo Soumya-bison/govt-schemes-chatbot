@@ -86,15 +86,40 @@ export default function ChatBotPanel({ onReportFeedback, initialQuery, lang }) {
       setIsListening(false);
     };
 
-    recognition.onerror = (event) => {
-      console.error('Speech recognition error:', event.error);
-      setIsListening(false);
-      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-        alert(lang === 'mr'
-          ? 'मायक्रोफोनची परवानगी द्या आणि पुन्हा प्रयत्न करा.'
-          : 'Please allow microphone access and try again.');
-      }
-    };
+  recognition.onerror = (event) => {
+  console.error('Speech recognition error:', {
+    error: event.error,
+    message: event.message,
+  });
+
+  setIsListening(false);
+
+  if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+    alert(
+      lang === 'mr'
+        ? 'मायक्रोफोनची परवानगी द्या आणि पुन्हा प्रयत्न करा.'
+        : 'Please allow microphone access for this website.'
+    );
+  } else if (event.error === 'audio-capture') {
+    alert(
+      lang === 'mr'
+        ? 'मायक्रोफोन सापडला नाही. तुमचा मायक्रोफोन तपासा.'
+        : 'No microphone was found. Please check your microphone.'
+    );
+  } else if (event.error === 'no-speech') {
+    alert(
+      lang === 'mr'
+        ? 'आवाज ऐकू आला नाही. पुन्हा बोला.'
+        : 'No speech was detected. Please try speaking again.'
+    );
+  } else if (event.error === 'network') {
+    alert(
+      lang === 'mr'
+        ? 'व्हॉइस सेवेच्या नेटवर्कमध्ये समस्या आली.'
+        : 'There was a network problem with the speech service.'
+    );
+  }
+}; 
 
     recognition.onend = () => {
       setIsListening(false);
