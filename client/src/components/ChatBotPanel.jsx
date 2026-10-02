@@ -5,10 +5,12 @@ import { translations } from '../data/translations';
 export default function ChatBotPanel({ onReportFeedback, initialQuery, lang }) {
   const t = translations[lang];
   const messagesEndRef = useRef(null);
+  const recognitionRef = useRef(null);
 
   const [inputQuery, setInputQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [messages, setMessages] = useState([
     {
       id: 'welcome-1',
@@ -36,6 +38,13 @@ export default function ChatBotPanel({ onReportFeedback, initialQuery, lang }) {
     scrollToBottom();
   }, [messages]);
 
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) recognitionRef.current.stop();
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    };
+  }, []);
+
   // Handle initial query if passed from Scheme Directory card
   useEffect(() => {
     if (initialQuery) {
@@ -46,47 +55,95 @@ export default function ChatBotPanel({ onReportFeedback, initialQuery, lang }) {
   // Web Speech API: Voice Speech Recognition
   const handleVoiceListen = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
     if (!SpeechRecognition) {
-      alert(lang === 'mr' ? 'तुमच्या ब्राऊझरमध्ये व्हॉइस इनपुट सपोर्ट उपलब्ध नाही.' : 'Voice recognition is not supported in your browser.');
+      alert(lang === 'mr'
+        ? 'तुमच्या ब्राऊझरमध्ये व्हॉइस इनपुट सपोर्ट उपलब्ध नाही. Chrome किंवा Edge वापरून पहा.'
+        : 'Voice recognition is not supported in this browser. Please try Chrome or Edge.');
+      return;
+    }
+
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
       return;
     }
 
     const recognition = new SpeechRecognition();
-    recognition.lang = lang === 'mr' ? 'mr-IN' : 'en-US';
+    recognitionRef.current = recognition;
+    recognition.lang = lang === 'mr' ? 'mr-IN' : 'en-IN';
     recognition.interimResults = false;
+    recognition.continuous = false;
+    recognition.maxAlternatives = 1;
 
-    recognition.onstart = () => {
-      setIsListening(true);
-    };
+    recognition.onstart = () => setIsListening(true);
 
     recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      setInputQuery(transcript);
+      const transcript = event.results[0][0].transcript.trim();
+      if (transcript) {
+        setInputQuery(transcript);
+        handleSend(transcript);
+      }
       setIsListening(false);
-      handleSend(transcript);
     };
 
-    recognition.onerror = (err) => {
-      console.error('Speech recognition error:', err);
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
       setIsListening(false);
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        alert(lang === 'mr'
+          ? 'मायक्रोफोनची परवानगी द्या आणि पुन्हा प्रयत्न करा.'
+          : 'Please allow microphone access and try again.');
+      }
     };
 
     recognition.onend = () => {
       setIsListening(false);
+      recognitionRef.current = null;
     };
 
-    recognition.start();
+    try {
+      recognition.start();
+    } catch (error) {
+      console.error('Could not start speech recognition:', error);
+      setIsListening(false);
+    }
   };
 
   // Text-to-Speech audio readout
   const handleSpeak = (text) => {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel(); // Stop any active speech
-      const cleanText = text.replace(/<[^>]*>?/gm, '').replace(/\*/g, '').replace(/#/g, '');
-      const utterance = new SpeechSynthesisUtterance(cleanText);
-      utterance.lang = lang === 'mr' ? 'mr-IN' : 'en-US';
-      window.speechSynthesis.speak(utterance);
+    if (!('speechSynthesis' in window)) {
+      alert(lang === 'mr'
+        ? 'तुमच्या ब्राऊझरमध्ये ऑडिओ वाचन उपलब्ध नाही.'
+        : 'Text-to-speech is not supported in this browser.');
+      return;
     }
+
+    window.speechSynthesis.cancel();
+
+    const cleanText = text
+      .replace(/<[^>]*>?/gm, '')
+      .replace(/\*/g, '')
+      .replace(/#/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!cleanText) return;
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.lang = lang === 'mr' ? 'mr-IN' : 'en-IN';
+    utterance.rate = 0.95;
+    utterance.pitch = 1;
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+
+    setIsSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const handleStopSpeaking = () => {
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+    setIsSpeaking(false);
   };
 
   const handleSend = async (queryToSend = null) => {
@@ -183,14 +240,27 @@ export default function ChatBotPanel({ onReportFeedback, initialQuery, lang }) {
             {/* Audio Readout & Cited Sources */}
             {msg.sender === 'bot' && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.4rem' }}>
-                <button
-                  onClick={() => handleSpeak(msg.text)}
-                  style={{ background: 'transparent', color: 'var(--secondary-teal)', fontSize: '0.75rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.2rem' }}
-                  title="उत्तर ऐका (Listen to Response)"
-                >
-                  <Volume2 size={14} />
-                  <span>{lang === 'mr' ? 'ऐका (Audio)' : 'Listen'}</span>
-                </button>
+                {isSpeaking ? (
+                  <button
+                    type="button"
+                    onClick={handleStopSpeaking}
+                    style={{ background: 'transparent', color: '#dc2626', fontSize: '0.75rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.2rem' }}
+                    title="ऑडिओ थांबवा (Stop Audio)"
+                  >
+                    <Volume2 size={14} />
+                    <span>{lang === 'mr' ? 'थांबवा' : 'Stop'}</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleSpeak(msg.text)}
+                    style={{ background: 'transparent', color: 'var(--secondary-teal)', fontSize: '0.75rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '0.2rem' }}
+                    title="उत्तर ऐका (Listen to Response)"
+                  >
+                    <Volume2 size={14} />
+                    <span>{lang === 'mr' ? 'ऐका (Audio)' : 'Listen'}</span>
+                  </button>
+                )}
               </div>
             )}
 
@@ -278,7 +348,8 @@ export default function ChatBotPanel({ onReportFeedback, initialQuery, lang }) {
           type="button"
           className={`voice-mic-btn ${isListening ? 'recording' : ''}`}
           onClick={handleVoiceListen}
-          title={isListening ? 'ऐकत आहे... (Listening...)' : 'बोला (Voice Input in Marathi)'}
+          aria-label={isListening ? 'Stop voice input' : 'Start voice input'}
+          title={isListening ? 'ऐकणे थांबवा (Stop Listening)' : 'बोला (Voice Input)'}
         >
           <Mic size={18} />
         </button>
